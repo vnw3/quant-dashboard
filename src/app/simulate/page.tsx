@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { runSimulation, fetchSimulationStatus } from "../../lib/api";
+import { hasApiKey, runLiveSimulation, type SimPhase } from "../../lib/gemini";
 
 // ---------------------------------------------------------------------------
 // Scenario cards
@@ -136,22 +137,50 @@ export default function SimulatePage() {
   const [running, setRunning] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveMode, setLiveMode] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    setLiveMode(hasApiKey());
+  }, []);
 
   const handleRun = useCallback(async () => {
-    const scenario = selectedScenario || "custom";
-    const shock = customShock || undefined;
+    const scenarioName = selectedScenario
+      ? SCENARIOS.find((s) => s.id === selectedScenario)?.description || selectedScenario
+      : "";
+    const shock = customShock || scenarioName;
 
     if (!selectedScenario && !customShock.trim()) return;
 
     setRunning(true);
     setComplete(false);
     setError(null);
+    setSimulationResult(null);
     setPhases(DEFAULT_PHASES.map((p) => ({ ...p, status: "pending" as const })));
 
-    try {
-      const status = await runSimulation(scenario, shock);
+    // Priority 1: Client-side Gemini (works on GitHub Pages)
+    if (hasApiKey()) {
+      try {
+        const result = await runLiveSimulation(
+          selectedScenario || "custom",
+          shock,
+          (updatedPhases: SimPhase[]) => setPhases(updatedPhases)
+        );
+        setSimulationResult(result as unknown as Record<string, unknown>);
+        setRunning(false);
+        setComplete(true);
+        return;
+      } catch (e) {
+        setRunning(false);
+        setError(e instanceof Error ? e.message : "Gemini API error. Check your API key.");
+        return;
+      }
+    }
 
-      // Update phases from server if available
+    // Priority 2: Backend API
+    try {
+      const status = await runSimulation(selectedScenario || "custom", customShock || undefined);
+
       if (status.phases) {
         setPhases(status.phases);
       }
@@ -180,7 +209,7 @@ export default function SimulatePage() {
 
       setTimeout(poll, 1500);
     } catch {
-      // Simulate progress locally when backend is not available
+      // Priority 3: Mock simulation (demo mode)
       let idx = 0;
       const simulateProgress = () => {
         if (idx < DEFAULT_PHASES.length) {
@@ -217,16 +246,37 @@ export default function SimulatePage() {
 
       {/* Header */}
       <div className="mb-8">
-        <h1
-          className="text-2xl font-bold text-[#171c1f] tracking-tight"
-          style={{ fontFamily: "var(--font-manrope)" }}
-        >
-          Run Simulation
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1
+            className="text-2xl font-bold text-[#171c1f] tracking-tight"
+            style={{ fontFamily: "var(--font-manrope)" }}
+          >
+            Run Simulation
+          </h1>
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                liveMode ? "bg-emerald-500" : "bg-[#d1d5db]"
+              }`}
+            />
+            <span className="text-xs text-[#6b7280]">
+              {liveMode ? "Live Mode (Gemini)" : "Demo Mode"}
+            </span>
+          </div>
+        </div>
         <p className="text-[#42474d] text-sm mt-1">
           Select a pre-built market scenario or describe a custom shock. The multi-agent system will generate fund
           positioning, run an adversarial debate, and produce consensus analysis.
         </p>
+        {!liveMode && (
+          <div className="bg-amber-50 rounded-md p-3 mt-3">
+            <p className="text-amber-800 text-xs">
+              <span className="font-medium">No API key configured.</span>{" "}
+              Click &quot;API Key&quot; in the sidebar to add your free Gemini key for live AI-powered simulations.
+              Without a key, simulations run in demo mode with pre-computed data.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Scenario Cards */}
@@ -379,11 +429,84 @@ export default function SimulatePage() {
               setComplete(false);
               setRunning(false);
               setPhases(DEFAULT_PHASES);
+              setSimulationResult(null);
             }}
             className="mt-4 w-full py-2.5 rounded-md text-xs font-medium text-[#6b7280] hover:text-[#171c1f] transition-colors"
           >
             Run Another Simulation
           </button>
+        </div>
+      )}
+
+      {/* Live simulation results */}
+      {complete && simulationResult && (
+        <div className="mt-6 space-y-6">
+          {(simulationResult as { marketContext?: string }).marketContext && (
+            <div className="bg-white rounded-md shadow-[0_20px_40px_rgba(23,28,31,0.06)] p-6">
+              <h3
+                className="text-[#171c1f] text-base font-semibold mb-3 tracking-tight"
+                style={{ fontFamily: "var(--font-manrope)" }}
+              >
+                Market Context
+              </h3>
+              <p className="text-[#42474d] text-sm leading-relaxed whitespace-pre-wrap">
+                {(simulationResult as { marketContext: string }).marketContext}
+              </p>
+            </div>
+          )}
+
+          {(simulationResult as { memos?: Record<string, string> }).memos && (
+            <div className="bg-white rounded-md shadow-[0_20px_40px_rgba(23,28,31,0.06)] p-6">
+              <h3
+                className="text-[#171c1f] text-base font-semibold mb-4 tracking-tight"
+                style={{ fontFamily: "var(--font-manrope)" }}
+              >
+                Fund Positioning Memos
+              </h3>
+              <div className="space-y-4">
+                {Object.entries((simulationResult as { memos: Record<string, string> }).memos).map(
+                  ([fundKey, memo]) => (
+                    <div key={fundKey} className="bg-[#f6fafe] rounded-md p-4">
+                      <h4 className="text-[#171c1f] text-sm font-semibold mb-2 capitalize">
+                        {fundKey.replace(/_/g, " ")}
+                      </h4>
+                      <p className="text-[#42474d] text-xs leading-relaxed whitespace-pre-wrap">
+                        {memo}
+                      </p>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {(simulationResult as { debate?: string }).debate && (
+            <div className="bg-white rounded-md shadow-[0_20px_40px_rgba(23,28,31,0.06)] p-6">
+              <h3
+                className="text-[#171c1f] text-base font-semibold mb-3 tracking-tight"
+                style={{ fontFamily: "var(--font-manrope)" }}
+              >
+                Adversarial Debate
+              </h3>
+              <p className="text-[#42474d] text-sm leading-relaxed whitespace-pre-wrap">
+                {(simulationResult as { debate: string }).debate}
+              </p>
+            </div>
+          )}
+
+          {(simulationResult as { consensus?: string }).consensus && (
+            <div className="bg-white rounded-md shadow-[0_20px_40px_rgba(23,28,31,0.06)] p-6">
+              <h3
+                className="text-[#171c1f] text-base font-semibold mb-3 tracking-tight"
+                style={{ fontFamily: "var(--font-manrope)" }}
+              >
+                Consensus Analysis
+              </h3>
+              <p className="text-[#42474d] text-sm leading-relaxed whitespace-pre-wrap">
+                {(simulationResult as { consensus: string }).consensus}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
