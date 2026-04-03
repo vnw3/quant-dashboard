@@ -16,9 +16,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Stitch -- Hedge Fund Multi-Agent Simulation",
+  title: "War Room -- Hedge Fund AI Simulation",
   description:
-    "Multi-agent simulation dashboard for hedge fund positioning analysis. Global Tariff Escalation scenario, March 31 2026.",
+    "Multi-agent hedge fund simulation dashboard with adversarial debate, Agentic 13F projections, and Copy-Cat Alpha signals.",
 };
 
 export default function RootLayout({

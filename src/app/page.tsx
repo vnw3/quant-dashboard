@@ -322,7 +322,7 @@ export default function DashboardPage() {
             Dashboard Overview
           </h1>
           <p className="text-[#42474d] text-sm mt-1">
-            Global Tariff Escalation Scenario -- March 31, 2026
+            Multi-agent hedge fund positioning and consensus analysis
           </p>
         </div>
         <div className="flex items-center gap-4">

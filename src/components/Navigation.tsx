@@ -82,10 +82,10 @@ export default function Navigation() {
             className="text-white text-lg tracking-tight"
             style={{ fontFamily: "var(--font-manrope)" }}
           >
-            Stitch
+            War Room
           </h1>
           <p className="text-[#8b9bb0] text-xs mt-0.5">
-            Multi-Agent Simulation
+            Hedge Fund AI Simulation
           </p>
         </div>
 
@@ -171,10 +171,7 @@ export default function Navigation() {
 
         <div className="px-5 py-4">
           <p className="text-[#5a6e82] text-[10px]">
-            March 31, 2026
-          </p>
-          <p className="text-[#5a6e82] text-[10px]">
-            Global Tariff Escalation
+            FIN580 Quantitative Finance
           </p>
         </div>
       </nav>
